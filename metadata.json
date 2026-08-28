@@ -1,0 +1,6 @@
+{
+  "name": "Sovereign ISP - Fluid Motion Dragon9 Mesh",
+  "description": "Decentralized peer-to-peer internet service provider dashboard featuring real-time node monitoring, zero-cost bandwidth analytics, Harmony Notes blockchain ledger, P2P Walkie-Talkie, Avatar Forge, Tide Synth Engine, and Sovereign Terminal.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
