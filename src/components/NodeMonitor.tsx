@@ -48,6 +48,7 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
   const [pingingNodeId, setPingingNodeId] = useState<string | null>(null);
   const [showDeployModal, setShowDeployModal] = useState<boolean>(false);
   const [bandwidthHistory, setBandwidthHistory] = useState<BandwidthSample[]>([]);
+  const [networkAggregate, setNetworkAggregate] = useState<{ time: string, throughput: number }[]>([]);
 
   // Deploy modal form state
   const [newNodeName, setNewNodeName] = useState('');
@@ -74,6 +75,30 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
 
   // Synchronize and stream real-time bandwidth fluctuations
   useEffect(() => {
+    // Generate 24h aggregate mock data
+    const generate24hAggregate = () => {
+      const agg: { time: string, throughput: number }[] = [];
+      const now = new Date();
+      // Total network capacity across all nodes
+      const totalCapacity = nodes.reduce((acc, node) => acc + node.bandwidthMbps, 0);
+      
+      for (let i = 24; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+        const hour = d.getHours();
+        
+        // Simulating usage curve: higher during day (8-22), lower at night
+        const isDaytime = hour >= 8 && hour <= 22;
+        const usageMultiplier = isDaytime ? 0.6 + Math.random() * 0.3 : 0.2 + Math.random() * 0.2;
+        
+        agg.push({
+          time: `${hour.toString().padStart(2, '0')}:00`,
+          throughput: Math.round(totalCapacity * usageMultiplier)
+        });
+      }
+      setNetworkAggregate(agg);
+    };
+    generate24hAggregate();
+
     if (!selectedNode) return;
     setBandwidthHistory(generateInitialSamples(selectedNode.bandwidthMbps, selectedNode.latencyMs));
 
@@ -177,6 +202,59 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
         </button>
       </div>
 
+      {/* 24H Aggregate Network Throughput (Recharts AreaChart) */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-sm font-bold text-white">24H Aggregate Network Throughput</h3>
+          </div>
+          <div className="text-xs font-mono text-slate-400">
+            Peak Capacity: <span className="text-cyan-400 font-bold">{Math.max(...networkAggregate.map(d => d.throughput), 0)} Mbps</span>
+          </div>
+        </div>
+        <div className="h-32 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={networkAggregate} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="networkAggregateGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
+              <XAxis 
+                dataKey="time" 
+                hide 
+              />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="bg-slate-900/95 border border-slate-700 px-3 py-2 rounded-xl shadow-xl text-xs font-mono backdrop-blur-sm z-30">
+                        <div className="text-cyan-400 font-bold text-sm mb-1">{data.throughput} Mbps</div>
+                        <div className="text-slate-400">{data.time}</div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="throughput"
+                stroke="#06b6d4"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#networkAggregateGrad)"
+                isAnimationActive={true}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       {/* Main Grid: Visual Mesh Map (Left) + Selected Node Specs (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -236,6 +314,8 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
             <div className="relative w-full h-full min-h-[300px]">
               {nodes.map((node) => {
                 const isSelected = selectedNode?.id === node.id;
+                const isDegraded = node.status === 'degraded' || node.status === 'offline' || node.latencyMs > 100;
+                
                 return (
                   <button
                     key={node.id}
@@ -249,22 +329,35 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
                     }`}
                   >
                     <div className="relative flex items-center justify-center">
+                      {/* Critical Alert Beacon */}
+                      {isDegraded && (
+                        <>
+                          <span className="absolute w-16 h-16 rounded-full bg-rose-500/20 animate-ping"></span>
+                          <span className="absolute w-12 h-12 rounded-full border border-rose-500/50 animate-pulse"></span>
+                        </>
+                      )}
+                      
                       <span className={`absolute w-8 h-8 rounded-full animate-ping opacity-30 ${
+                        isDegraded ? 'bg-rose-500' :
                         node.type === 'server' ? 'bg-emerald-400' :
                         node.type === 'holiday_park' ? 'bg-amber-400' : 'bg-cyan-400'
                       }`}></span>
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shadow-lg ${
                         isSelected 
-                          ? 'bg-emerald-500 text-slate-950 border-white shadow-emerald-500/50' 
-                          : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-400'
+                          ? (isDegraded ? 'bg-rose-500 text-slate-950 border-white shadow-rose-500/50' : 'bg-emerald-500 text-slate-950 border-white shadow-emerald-500/50')
+                          : (isDegraded ? 'bg-slate-900 border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.3)]' : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-400')
                       }`}>
                         {getNodeIcon(node.type)}
                       </div>
                     </div>
 
                     {/* Tooltip on marker */}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-white text-[10px] font-bold px-2 py-1 rounded border border-slate-800 whitespace-nowrap shadow-xl pointer-events-none">
-                      {node.name} ({node.latencyMs}ms)
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-white text-[10px] font-bold px-2 py-1 rounded border border-slate-800 whitespace-nowrap shadow-xl pointer-events-none z-30">
+                      <div className="flex items-center gap-1.5">
+                        <span>{node.name}</span>
+                        <span className={isDegraded ? 'text-rose-400' : 'text-emerald-400'}>({node.latencyMs}ms)</span>
+                      </div>
+                      {isDegraded && <div className="text-rose-400 text-[9px] mt-0.5">Critical Latency/Status</div>}
                     </div>
                   </button>
                 );
