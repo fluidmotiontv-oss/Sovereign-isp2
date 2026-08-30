@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { MeshHeatmapOverlay } from './MeshHeatmapOverlay';
 import { MeshNode, NodeType } from '../types';
 import { 
   ResponsiveContainer, 
@@ -201,7 +202,10 @@ export const NodeMonitor: React.FC<NodeMonitorProps> = ({ nodes, onDeployNode })
             {/* Grid background overlay */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:24px_24px]"></div>
 
-            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+            {/* D3 Geospatial Heatmap Overlay */}
+            <MeshHeatmapOverlay nodes={nodes} />
+
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
               {/* Draw animated connection lines between nodes */}
               {nodes.map((source, i) =>
                 nodes.slice(i + 1).map((target) => (
